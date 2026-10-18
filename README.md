@@ -43,6 +43,24 @@ Optional multi-architecture build verification (requires a working Docker Buildx
 
 This only verifies image builds. Full application and runtime performance on real ARM64 hardware are not established by an x86-only build.
 
+## Troubleshooting: 500 on upload / permission denied
+
+If the API logs show `PermissionError: [Errno 13] Permission denied: '/data/...'` on `POST /api/process`, the bind-mounted `./data` directory is not writable by the container's non-root UID **10001**. The server may still show `/api/health` as healthy.
+
+From the directory containing `compose.yaml` on the host (not inside the container), run:
+
+```bash
+docker compose down
+sudo mkdir -p data
+sudo chown -R 10001:10001 data
+sudo chmod -R u+rwX data
+docker compose up -d
+```
+
+Check with `docker compose exec audio-lab sh -c 'id && ls -ld /data && test -w /data && echo writable'`. This preserves existing data and does not require rebuilding the image. If you instead use a Docker named volume or a different host bind path, identify that mount using `docker inspect suno-audio-lab --format '{{json .Mounts}}'` and fix permissions on the appropriate storage. With NFS root-squash, SMB or a read-only mount, host `chown` may fail; configure ownership/ACLs on the underlying storage rather than applying `chmod 777`.
+
+A shutdown with exit code 143 is typically SIGTERM and not this upload failure. A favicon 404 is cosmetic.
+
 ## Processing
 
 - **Transparent:** peak limiter; optional loudness normalization.
