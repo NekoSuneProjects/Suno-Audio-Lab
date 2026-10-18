@@ -65,7 +65,7 @@ def visualize(src: Path, dest: Path, mode: str):
 
 def process(job_dir: Path, original: Path, preset: str, output_format: str, do_normalize: bool):
     before = probe(original)
-    if preset not in ('transparent', 'gentle', 'vocal'):
+    if preset not in ('transparent', 'gentle', 'vocal', 'studio'):
         raise ValueError('Invalid preset')
     if output_format not in ('wav', 'flac', 'mp3'):
         raise ValueError('Invalid output format')
@@ -73,6 +73,9 @@ def process(job_dir: Path, original: Path, preset: str, output_format: str, do_n
         'transparent': [],
         'gentle': ['highpass=f=25', 'equalizer=f=270:t=q:w=1.0:g=-1.2',
                    'equalizer=f=3500:t=q:w=0.8:g=0.8', 'acompressor=threshold=-18dB:ratio=1.45:attack=20:release=180:makeup=1'],
+        'studio': ['highpass=f=22', 'equalizer=f=230:t=q:w=0.9:g=-0.7',
+                   'equalizer=f=3400:t=q:w=0.9:g=0.5',
+                   'acompressor=threshold=-21dB:ratio=1.2:attack=30:release=250:makeup=1'],
         'vocal': ['highpass=f=35', 'equalizer=f=320:t=q:w=1.1:g=-1.8',
                   'equalizer=f=4500:t=q:w=0.9:g=1.0', 'acompressor=threshold=-20dB:ratio=1.7:attack=15:release=200:makeup=1']
     }[preset]
@@ -92,11 +95,31 @@ def process(job_dir: Path, original: Path, preset: str, output_format: str, do_n
     command += [str(processed)]
     run(command)
     after = probe(processed)
+    # Guard against accidental truncation or a wildly shifted measured loudness.
+    before_duration = float(before['format']['duration'])
+    after_duration = float(after['format']['duration'])
+    if abs(after_duration - before_duration) > max(0.15, before_duration * 0.002):
+        raise ValueError('Output duration differs unexpectedly; original preserved')
+    original_loudness = loudness(original)
+    processed_loudness = loudness(processed)
+    original_i = original_loudness.get('input_i')
+    processed_i = processed_loudness.get('input_i')
+    if preset == 'studio' and not do_normalize and original_i is not None and processed_i is not None:
+        try:
+            if abs(float(processed_i) - float(original_i)) > 4:
+                raise ValueError('Studio mode changed loudness excessively; original preserved')
+        except (TypeError, ValueError) as exc:
+            if str(exc).startswith('Studio mode'):
+                raise
+
     report = {
         'job_id': job_dir.name, 'preset': preset, 'format': output_format,
         'loudness_normalization': do_normalize,
-        'original': {'probe': before, 'loudness': loudness(original)},
-        'processed': {'probe': after, 'loudness': loudness(processed)},
+        'original': {'probe': before, 'loudness': original_loudness},
+        'processed': {'probe': after, 'loudness': processed_loudness},
+        'quality_checks': {'duration_seconds_delta': round(after_duration - before_duration, 4),
+                           'duration_valid': True,
+                           'studio_non_normalized_loudness_guard_db': 4},
         'disclaimer': ('These measurements do not identify AI generation or verify watermark removal. '
                        'C2PA/content credentials and embedded metadata may not survive transcoding; '
                        'do not misrepresent the origin or ownership of music.')
@@ -129,7 +152,7 @@ async def upload_and_process(
     ext = Path(file.filename or '').suffix.lower()
     if ext not in ALLOWED:
         raise HTTPException(400, 'Unsupported audio extension')
-    if preset not in ('transparent','gentle','vocal') or output_format not in ('wav','flac','mp3'):
+    if preset not in ('transparent','gentle','vocal','studio') or output_format not in ('wav','flac','mp3'):
         raise HTTPException(400, 'Invalid processing options')
     job_id = uuid.uuid4().hex
     folder = BASE / job_id
