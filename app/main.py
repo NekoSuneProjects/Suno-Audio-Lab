@@ -99,7 +99,7 @@ def process(job_dir: Path, original: Path, preset: str, output_format: str, do_n
     before_duration = float(before['format']['duration'])
     after_duration = float(after['format']['duration'])
     if abs(after_duration - before_duration) > max(0.15, before_duration * 0.002):
-        raise ValueError('Output duration differs unexpectedly; original preserved')
+        raise ValueError('Output duration differs unexpectedly; processing rejected')
     original_loudness = loudness(original)
     processed_loudness = loudness(processed)
     original_i = original_loudness.get('input_i')
@@ -107,7 +107,7 @@ def process(job_dir: Path, original: Path, preset: str, output_format: str, do_n
     if preset == 'studio' and not do_normalize and original_i is not None and processed_i is not None:
         try:
             if abs(float(processed_i) - float(original_i)) > 4:
-                raise ValueError('Studio mode changed loudness excessively; original preserved')
+                raise ValueError('Studio mode changed loudness excessively; processing rejected')
         except (TypeError, ValueError) as exc:
             if str(exc).startswith('Studio mode'):
                 raise
