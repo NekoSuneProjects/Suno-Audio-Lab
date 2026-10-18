@@ -1,0 +1,19 @@
+services:
+  audio-lab:
+    # Deliberately no platform override: Docker selects amd64/arm64 natively.
+    build:
+      context: .
+    image: suno-audio-lab:local
+    container_name: suno-audio-lab
+    restart: unless-stopped
+    ports:
+      - "${AUDIO_LAB_BIND:-127.0.0.1}:${AUDIO_LAB_PORT:-8787}:8000"
+    environment:
+      MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-150}"
+    volumes:
+      - ./data:/data
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 2g
