@@ -63,6 +63,7 @@ A shutdown with exit code 143 is typically SIGTERM and not this upload failure. 
 
 ## Processing
 
+- **Studio quality:** conservative EQ and low-ratio compression for full musical mixes. Checks the processed duration against the original and (when normalization is off) rejects >4 LU loudness changes. The original upload is retained in the job folder on successful processing.
 - **Transparent:** peak limiter; optional loudness normalization.
 - **Gentle:** high-pass at 25 Hz, subtle low-mid EQ, presence EQ and light compression.
 - **Vocal:** high-pass at 35 Hz, more noticeable mid EQ and light compression.
